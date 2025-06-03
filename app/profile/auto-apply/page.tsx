@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/use-toast"
+import { saveProfileSettings } from "@/app/actions/settings"
 
 export default function AutoApplyPage() {
   // Organization information state
@@ -68,22 +69,30 @@ export default function AutoApplyPage() {
     requireApproval: true,
   })
 
+  const [saving, setSaving] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
+
+  const ORGANIZATION_ID = "123e4567-e89b-12d3-a456-426614174000"
+
   // Handle organization info changes
   const handleOrgInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setOrgInfo((prev) => ({ ...prev, [id.replace("org-", "")]: value }))
+    setHasChanges(true)
   }
 
   // Handle program info changes
   const handleProgramInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setProgInfo((prev) => ({ ...prev, [id.replace("program-", "").replace("-desc", "Desc")]: value }))
+    setHasChanges(true)
   }
 
   // Handle financial info changes
   const handleFinancialInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setFinancialInfo((prev) => ({ ...prev, [id.replace("financial-", "").replace("-sources", "Sources")]: value }))
+    setHasChanges(true)
   }
 
   // Handle contact info changes
@@ -91,12 +100,14 @@ export default function AutoApplyPage() {
     const { id, value } = e.target
     const key = id.replace("primary-", "primary").replace("secondary-", "secondary")
     setContactInfo((prev) => ({ ...prev, [key]: value }))
+    setHasChanges(true)
   }
 
   // Handle auto-apply settings changes
   const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
     setAutoApplySettings((prev) => ({ ...prev, [id.replace("auto-apply-", "")]: value }))
+    setHasChanges(true)
   }
 
   // Handle switch changes
@@ -106,14 +117,55 @@ export default function AutoApplyPage() {
     } else if (id === "require-approval") {
       setAutoApplySettings((prev) => ({ ...prev, requireApproval: checked }))
     }
+    setHasChanges(true)
   }
 
   // Handle save changes
-  const handleSaveChanges = () => {
-    toast({
-      title: "Changes saved",
-      description: "Your auto-application settings have been updated.",
-    })
+  const handleSaveChanges = async () => {
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form before saving.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const result = await saveProfileSettings({
+        orgInfo,
+        programInfo,
+        financialInfo,
+        contactInfo,
+        autoApplySettings,
+        organizationId: ORGANIZATION_ID,
+      })
+
+      if (result.success) {
+        toast({
+          title: "Changes saved",
+          description: "Your auto-application settings have been updated.",
+        })
+        setHasChanges(false)
+      } else {
+        toast({
+          title: "Error saving changes",
+          description: result.error || "An unknown error occurred",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving changes:", error)
+      toast({
+        title: "Error saving changes",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Handle document view
@@ -130,6 +182,11 @@ export default function AutoApplyPage() {
       title: "Auto-applying to grants",
       description: "Starting auto-application process for all eligible grants...",
     })
+  }
+
+  const validateForm = () => {
+    // Add your validation logic here
+    return true // Return true if the form is valid, false otherwise
   }
 
   return (
@@ -151,7 +208,7 @@ export default function AutoApplyPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="gap-2" onClick={handleSaveChanges}>
+              <Button className="gap-2" onClick={handleSaveChanges} disabled={!hasChanges || saving}>
                 <Save className="h-4 w-4" />
                 Save Changes
               </Button>
